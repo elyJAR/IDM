@@ -26,6 +26,12 @@ interface DownloadDao {
     @Query("UPDATE downloads SET downloadedBytes = :downloaded, totalBytes = :total, status = :status WHERE url = :url")
     suspend fun updateProgressByUrl(url: String, downloaded: Long, total: Long, status: String)
 
+    @Query("UPDATE downloads SET filePath = :filePath WHERE url = :url")
+    suspend fun updateFilePathByUrl(url: String, filePath: String)
+
+    @Query("UPDATE downloads SET filename = :filename WHERE url = :url")
+    suspend fun updateFilenameByUrl(url: String, filename: String)
+
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun deleteDownloadById(id: Int)
 

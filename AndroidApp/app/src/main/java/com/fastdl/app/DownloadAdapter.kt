@@ -36,12 +36,11 @@ class DownloadAdapter : ListAdapter<DownloadEntity, DownloadAdapter.DownloadView
             filenameText.text = download.filename
             statusText.text = download.status
 
-            if (download.status == "COMPLETED") {
-                statusText.setTextColor(android.graphics.Color.parseColor("#22c55e")) // Green
-            } else if (download.status == "FAILED") {
-                statusText.setTextColor(android.graphics.Color.parseColor("#ef4444")) // Red
-            } else {
-                statusText.setTextColor(android.graphics.Color.parseColor("#3b82f6")) // Blue
+            when (download.status) {
+                "COMPLETED" -> statusText.setTextColor(android.graphics.Color.parseColor("#22c55e")) // Green
+                "FAILED" -> statusText.setTextColor(android.graphics.Color.parseColor("#ef4444")) // Red
+                "PAUSED" -> statusText.setTextColor(android.graphics.Color.parseColor("#eab308")) // Yellow
+                else -> statusText.setTextColor(android.graphics.Color.parseColor("#3b82f6")) // Blue
             }
 
             if (download.totalBytes > 0) {
@@ -65,12 +64,45 @@ class DownloadAdapter : ListAdapter<DownloadEntity, DownloadAdapter.DownloadView
 
         private fun showPopupMenu(context: Context, anchor: View, download: DownloadEntity) {
             val popup = PopupMenu(context, anchor)
+
+            if (download.status == "DOWNLOADING") {
+                popup.menu.add("Pause Download")
+            } else if (download.status == "PAUSED") {
+                popup.menu.add("Resume Download")
+            }
+
             popup.menu.add("Copy Download Link")
             popup.menu.add("Open File")
             popup.menu.add("Delete")
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.title) {
+                    "Pause Download" -> {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val db = AppDatabase.getDatabase(context)
+                            db.downloadDao().updateStatus(download.id, "PAUSED")
+                        }
+                        Toast.makeText(context, "Download paused", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                    "Resume Download" -> {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val db = AppDatabase.getDatabase(context)
+                            db.downloadDao().updateStatus(download.id, "DOWNLOADING")
+                        }
+                        val serviceIntent = Intent(context, DownloadService::class.java).apply {
+                            putExtra("TYPE", if (download.isYouTube) "YOUTUBE" else "STANDARD")
+                            putExtra("URL", download.url)
+                            putExtra("FILENAME", download.filename)
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            context.startForegroundService(serviceIntent)
+                        } else {
+                            context.startService(serviceIntent)
+                        }
+                        Toast.makeText(context, "Resuming download...", Toast.LENGTH_SHORT).show()
+                        true
+                    }
                     "Copy Download Link" -> {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText("Download URL", download.url)
@@ -79,16 +111,24 @@ class DownloadAdapter : ListAdapter<DownloadEntity, DownloadAdapter.DownloadView
                         true
                     }
                     "Open File" -> {
-                        val file = File(download.filePath)
+                        val filePath = download.filePath.ifEmpty {
+                            val publicDownloads = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                            File(File(publicDownloads, "FastDL"), download.filename).absolutePath
+                        }
+                        val file = File(filePath)
                         if (file.exists()) {
-                            val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            try {
+                                val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Open File With"))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-                            context.startActivity(Intent.createChooser(intent, "Open File With"))
                         } else {
-                            Toast.makeText(context, "File does not exist on disk", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "File does not exist on disk: $filePath", Toast.LENGTH_LONG).show()
                         }
                         true
                     }
@@ -96,8 +136,10 @@ class DownloadAdapter : ListAdapter<DownloadEntity, DownloadAdapter.DownloadView
                         CoroutineScope(Dispatchers.IO).launch {
                             val db = AppDatabase.getDatabase(context)
                             db.downloadDao().deleteDownloadById(download.id)
-                            val file = File(download.filePath)
-                            if (file.exists()) file.delete()
+                            if (download.filePath.isNotEmpty()) {
+                                val file = File(download.filePath)
+                                if (file.exists()) file.delete()
+                            }
                         }
                         Toast.makeText(context, "Download removed", Toast.LENGTH_SHORT).show()
                         true

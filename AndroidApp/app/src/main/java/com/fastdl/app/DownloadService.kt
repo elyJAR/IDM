@@ -6,6 +6,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Environment
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -45,7 +46,9 @@ class DownloadService : Service() {
         startForeground(1, notification)
 
         if (url != null) {
-            val outputDir = getExternalFilesDir(null) ?: filesDir
+            // Save directly into phone's Public Downloads -> FastDL folder
+            val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val outputDir = File(publicDownloads, "FastDL").apply { if (!exists()) mkdirs() }
             
             scope.launch {
                 try {
@@ -53,7 +56,7 @@ class DownloadService : Service() {
 
                     if (type == "YOUTUBE") {
                         Log.i("FastDL", "Starting YouTube Download...")
-                        youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir) { downloaded, total ->
+                        val (finalFile, realTitle) = youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir) { downloaded, total ->
                             val now = System.currentTimeMillis()
                             if (now - lastReportTime > 300 || downloaded == total) {
                                 lastReportTime = now
@@ -63,11 +66,14 @@ class DownloadService : Service() {
                                 }
                             }
                         }
-                        db.downloadDao().updateProgressByUrl(url, 100L, 100L, "COMPLETED")
-                        Log.i("FastDL", "YouTube Download Complete!")
+                        db.downloadDao().updateFilePathByUrl(url, finalFile.absolutePath)
+                        db.downloadDao().updateFilenameByUrl(url, realTitle)
+                        db.downloadDao().updateProgressByUrl(url, finalFile.length(), finalFile.length(), "COMPLETED")
+                        Log.i("FastDL", "YouTube Download Complete: ${finalFile.absolutePath}")
                     } else {
                         Log.i("FastDL", "Starting Standard Download...")
                         val targetFile = File(outputDir, filename)
+                        db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
                         
                         downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total ->
                             val now = System.currentTimeMillis()
@@ -80,8 +86,9 @@ class DownloadService : Service() {
                             }
                         }
                         
+                        db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
                         db.downloadDao().updateProgressByUrl(url, targetFile.length(), targetFile.length(), "COMPLETED")
-                        Log.i("FastDL", "Standard Download Complete!")
+                        Log.i("FastDL", "Standard Download Complete: ${targetFile.absolutePath}")
                     }
                 } catch (e: Exception) {
                     Log.e("FastDL", "Download failed: ${e.message}", e)

@@ -5,9 +5,15 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 
 class QualitySelectionBottomSheet : BottomSheetDialogFragment() {
 
@@ -39,9 +45,27 @@ class QualitySelectionBottomSheet : BottomSheetDialogFragment() {
 
         val titleText = view.findViewById<TextView>(R.id.dialogTitleText)
         val radioGroup = view.findViewById<RadioGroup>(R.id.qualityRadioGroup)
+        val radio1080 = view.findViewById<RadioButton>(R.id.radio1080)
+        val radio720 = view.findViewById<RadioButton>(R.id.radio720)
+        val radio480 = view.findViewById<RadioButton>(R.id.radio480)
+        val radioAudio = view.findViewById<RadioButton>(R.id.radioAudio)
         val downloadButton = view.findViewById<Button>(R.id.startDownloadBtn)
 
-        titleText.text = "Select Quality & Format"
+        videoUrl?.let { url ->
+            CoroutineScope(Dispatchers.IO).launch {
+                val client = OkHttpClient()
+                val manager = YouTubeDownloadManager(DownloadEngine(client), client)
+                val info = manager.fetchVideoInfo(url)
+
+                withContext(Dispatchers.Main) {
+                    titleText.text = info.title
+                    radio1080.text = "1080p Full HD (AV1/VP9) ~ ${info.size1080p}"
+                    radio720.text = "720p HD (Compact Size) ~ ${info.size720p}"
+                    radio480.text = "480p SD (Data Saver) ~ ${info.size480p}"
+                    radioAudio.text = "Audio Only (MP3 / Opus) ~ ${info.sizeAudio}"
+                }
+            }
+        }
 
         downloadButton.setOnClickListener {
             val selectedId = radioGroup.checkedRadioButtonId

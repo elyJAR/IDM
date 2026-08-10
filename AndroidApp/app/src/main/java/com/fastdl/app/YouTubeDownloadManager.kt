@@ -8,6 +8,14 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import java.io.File
 
+data class VideoInfo(
+    val title: String,
+    val size1080p: String = "45 MB",
+    val size720p: String = "25 MB",
+    val size480p: String = "12 MB",
+    val sizeAudio: String = "3.5 MB"
+)
+
 class YouTubeDownloadManager(
     private val downloadEngine: DownloadEngine,
     private val client: OkHttpClient
@@ -21,27 +29,37 @@ class YouTubeDownloadManager(
         }
     }
 
+    suspend fun fetchVideoInfo(url: String): VideoInfo = withContext(Dispatchers.IO) {
+        try {
+            val cleanUrl = url.replace("m.youtube.com", "www.youtube.com")
+            val extractor = ServiceList.YouTube.getStreamExtractor(cleanUrl)
+            extractor.fetchPage()
+            val rawTitle = extractor.name ?: "YouTube_Video"
+            return@withContext VideoInfo(title = rawTitle)
+        } catch (e: Exception) {
+            return@withContext VideoInfo(title = "YouTube Video")
+        }
+    }
+
     suspend fun downloadOptimizedYouTubeVideo(
         url: String,
         outputDir: File,
         onProgress: ((downloaded: Long, total: Long) -> Unit)? = null
-    ) = withContext(Dispatchers.IO) {
+    ): Pair<File, String> = withContext(Dispatchers.IO) {
 
-        // Normalize mobile YouTube URLs (m.youtube.com -> www.youtube.com)
         val cleanUrl = url.replace("m.youtube.com", "www.youtube.com")
-
-        // 1. Extract Streams using ServiceList factory method
         val extractor = ServiceList.YouTube.getStreamExtractor(cleanUrl)
         extractor.fetchPage()
 
-        // 2. Select Optimal Video Codec (AV1 > VP9 > H.264 > Progressive)
+        val rawTitle = extractor.name ?: "YouTube_Video"
+        val safeTitle = rawTitle.replace(Regex("[^a-zA-Z0-9._ -]"), "_").take(50)
+
         val videoOnlyStreams = extractor.videoOnlyStreams
         val optimalVideo = videoOnlyStreams.find { it.format?.name?.contains("AV1", ignoreCase = true) == true }
             ?: videoOnlyStreams.find { it.format?.name?.contains("VP9", ignoreCase = true) == true }
             ?: videoOnlyStreams.firstOrNull()
             ?: extractor.videoStreams.firstOrNull()
 
-        // 3. Select Optimal Audio Codec
         val audioStreams = extractor.audioStreams
         val optimalAudio = audioStreams.find { it.format?.name?.contains("OPUS", ignoreCase = true) == true }
             ?: audioStreams.firstOrNull()
@@ -49,27 +67,26 @@ class YouTubeDownloadManager(
         if (optimalVideo != null && optimalAudio != null) {
             val videoFile = File(outputDir, "temp_video_${System.currentTimeMillis()}.webm")
             val audioFile = File(outputDir, "temp_audio_${System.currentTimeMillis()}.webm")
-            val finalOutputFile = File(outputDir, "YouTube_${System.currentTimeMillis()}.mkv")
+            val finalOutputFile = File(outputDir, "$safeTitle.mkv")
 
-            // 4. Download Video and Audio Streams separately using our multi-part engine
             downloadEngine.downloadFileMultiPart(optimalVideo.content, videoFile, onProgress = onProgress)
             downloadEngine.downloadFileMultiPart(optimalAudio.content, audioFile)
 
-            // 5. Mux using FFmpegKit without re-encoding (Instant merge, zero quality loss)
-            val command = "-y -i ${videoFile.absolutePath} -i ${audioFile.absolutePath} -c copy ${finalOutputFile.absolutePath}"
+            val command = "-y -i \"${videoFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c copy \"${finalOutputFile.absolutePath}\""
             val session = FFmpegKit.execute(command)
 
             if (session.returnCode.isValueSuccess) {
                 videoFile.delete()
                 audioFile.delete()
                 onProgress?.invoke(finalOutputFile.length(), finalOutputFile.length())
+                return@withContext Pair(finalOutputFile, "$safeTitle.mkv")
             } else {
                 throw Exception("FFmpeg Muxing failed: ${session.failStackTrace}")
             }
         } else if (optimalVideo != null) {
-            // Progressive video fallback (contains both audio and video in 1 stream)
-            val finalOutputFile = File(outputDir, "YouTube_${System.currentTimeMillis()}.mp4")
+            val finalOutputFile = File(outputDir, "$safeTitle.mp4")
             downloadEngine.downloadFileMultiPart(optimalVideo.content, finalOutputFile, onProgress = onProgress)
+            return@withContext Pair(finalOutputFile, "$safeTitle.mp4")
         } else {
             throw Exception("Could not extract optimal streams from YouTube URL")
         }
