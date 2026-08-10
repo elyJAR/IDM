@@ -110,9 +110,11 @@ class MainActivity : AppCompatActivity() {
             val downloadEntity = DownloadEntity(
                 url = url,
                 filename = filename,
-                downloadedBytes = 0,
-                totalBytes = 0,
-                status = "DOWNLOADING"
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+                status = "DOWNLOADING",
+                filePath = "",
+                isYouTube = isYouTube
             )
             db.downloadDao().insertDownload(downloadEntity)
         }
