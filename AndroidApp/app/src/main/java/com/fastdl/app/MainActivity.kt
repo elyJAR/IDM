@@ -44,7 +44,10 @@ class MainActivity : AppCompatActivity() {
         handleIntent(intent)
     }
 
+    private var currentTabIsBrowser = true
+
     private fun switchTab(fragment: Fragment, isBrowser: Boolean) {
+        currentTabIsBrowser = isBrowser
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, fragment)
             .commit()
@@ -55,6 +58,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             tabBrowser.setTextColor(android.graphics.Color.parseColor("#94a3b8"))
             tabDownloads.setTextColor(android.graphics.Color.parseColor("#3b82f6"))
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (currentTabIsBrowser && browserFragment.canGoBack()) {
+            browserFragment.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
 

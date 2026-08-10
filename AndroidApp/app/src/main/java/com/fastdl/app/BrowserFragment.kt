@@ -117,4 +117,14 @@ class BrowserFragment : Fragment() {
         }
         bottomSheet.show(parentFragmentManager, "QualityBottomSheet")
     }
+
+    fun canGoBack(): Boolean {
+        return ::webView.isInitialized && webView.canGoBack()
+    }
+
+    fun goBack() {
+        if (::webView.isInitialized) {
+            webView.goBack()
+        }
+    }
 }
