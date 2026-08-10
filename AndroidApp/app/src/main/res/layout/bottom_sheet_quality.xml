@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#1e293b"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/dialogTitleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Select Video Quality"
+        android:textColor="#f8fafc"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <RadioGroup
+        android:id="@+id/qualityRadioGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp">
+
+        <RadioButton
+            android:id="@+id/radio1080"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:padding="12dp"
+            android:text="1080p Full HD (AV1/VP9 - Ultra Quality)"
+            android:textColor="#f8fafc" />
+
+        <RadioButton
+            android:id="@+id/radio720"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="720p HD (Compact Size)"
+            android:textColor="#f8fafc" />
+
+        <RadioButton
+            android:id="@+id/radio480"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="480p SD (Data Saver)"
+            android:textColor="#f8fafc" />
+
+        <RadioButton
+            android:id="@+id/radioAudio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:text="Audio Only (MP3 / Opus)"
+            android:textColor="#3b82f6" />
+    </RadioGroup>
+
+    <Button
+        android:id="@+id/startDownloadBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:backgroundTint="#3b82f6"
+        android:padding="12dp"
+        android:text="Start Download"
+        android:textColor="#ffffff"
+        android:textSize="16sp" />
+
+</LinearLayout>

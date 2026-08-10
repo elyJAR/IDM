@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0f172a">
+
+    <!-- Top Navigation Bar -->
+    <LinearLayout
+        android:id="@+id/addressBarLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#1e293b"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <EditText
+            android:id="@+id/urlEditText"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/rounded_bg"
+            android:hint="Search or enter web URL..."
+            android:imeOptions="actionGo"
+            android:inputType="textUri"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:textColor="#f8fafc"
+            android:textColorHint="#64748b"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/goButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="#3b82f6"
+            android:text="Go"
+            android:textColor="#ffffff" />
+    </LinearLayout>
+
+    <!-- Quick Shortcuts (VidMate Style) -->
+    <LinearLayout
+        android:id="@+id/shortcutsLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#0f172a"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/addressBarLayout">
+
+        <TextView
+            android:id="@+id/btnYoutube"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="YouTube"
+            android:textColor="#ef4444"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnInstagram"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="Instagram"
+            android:textColor="#ec4899"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnFacebook"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="Facebook"
+            android:textColor="#3b82f6"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnTikTok"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="TikTok"
+            android:textColor="#06b6d4"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- WebView -->
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/shortcutsLayout" />
+
+    <!-- VidMate-Style Pulsing Video Sniffer FloatingActionButton -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/videoSnifferFab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="24dp"
+        android:contentDescription="Download Detected Video"
+        android:src="@android:drawable/stat_sys_download"
+        android:visibility="gone"
+        app:backgroundTint="#ef4444"
+        app:tint="#ffffff"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

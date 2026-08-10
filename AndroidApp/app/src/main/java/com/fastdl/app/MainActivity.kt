@@ -4,81 +4,58 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import android.view.View
-import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.floatingactionbutton.FloatingActionButton
+import androidx.fragment.app.Fragment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var adapter: DownloadAdapter
     private lateinit var db: AppDatabase
-    private lateinit var emptyStateTextView: TextView
+    private lateinit var tabBrowser: TextView
+    private lateinit var tabDownloads: TextView
+
+    private val browserFragment = BrowserFragment()
+    private val downloadsFragment = DownloadsFragment()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         db = AppDatabase.getDatabase(this)
-        adapter = DownloadAdapter()
 
-        val recyclerView = findViewById<RecyclerView>(R.id.recyclerView)
-        emptyStateTextView = findViewById(R.id.emptyStateTextView)
+        tabBrowser = findViewById(R.id.tabBrowser)
+        tabDownloads = findViewById(R.id.tabDownloads)
 
-        recyclerView.layoutManager = LinearLayoutManager(this)
-        recyclerView.adapter = adapter
-
-        val fab = findViewById<FloatingActionButton>(R.id.addDownloadFab)
-        fab.setOnClickListener {
-            showAddDownloadDialog()
+        tabBrowser.setOnClickListener {
+            switchTab(browserFragment, isBrowser = true)
         }
 
-        // Observe the database and update the UI automatically
-        CoroutineScope(Dispatchers.Main).launch {
-            db.downloadDao().getAllDownloads().collectLatest { downloads ->
-                adapter.submitList(downloads)
-                if (downloads.isEmpty()) {
-                    emptyStateTextView.visibility = View.VISIBLE
-                    recyclerView.visibility = View.GONE
-                } else {
-                    emptyStateTextView.visibility = View.GONE
-                    recyclerView.visibility = View.VISIBLE
-                }
-            }
+        tabDownloads.setOnClickListener {
+            switchTab(downloadsFragment, isBrowser = false)
         }
+
+        // Set default fragment to Browser (VidMate Style)
+        switchTab(browserFragment, isBrowser = true)
 
         handleIntent(intent)
     }
 
-    private fun showAddDownloadDialog() {
-        val input = EditText(this).apply {
-            hint = "https://www.youtube.com/watch?v=... or direct link"
-            setPadding(32, 32, 32, 32)
-        }
+    private fun switchTab(fragment: Fragment, isBrowser: Boolean) {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, fragment)
+            .commit()
 
-        AlertDialog.Builder(this)
-            .setTitle("Add New Download")
-            .setMessage("Paste a YouTube URL or direct file download link:")
-            .setView(input)
-            .setPositiveButton("Download") { _, _ ->
-                val url = input.text.toString().trim()
-                if (url.isNotEmpty()) {
-                    processDownloadUrl(url, null, null)
-                } else {
-                    Toast.makeText(this, "Please enter a valid URL", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        if (isBrowser) {
+            tabBrowser.setTextColor(android.graphics.Color.parseColor("#3b82f6"))
+            tabDownloads.setTextColor(android.graphics.Color.parseColor("#94a3b8"))
+        } else {
+            tabBrowser.setTextColor(android.graphics.Color.parseColor("#94a3b8"))
+            tabDownloads.setTextColor(android.graphics.Color.parseColor("#3b82f6"))
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -101,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun processDownloadUrl(url: String, cookie: String?, customFilename: String?) {
+    fun processDownloadUrl(url: String, cookie: String?, customFilename: String?) {
         val isYouTube = url.contains("youtube.com") || url.contains("youtu.be")
         val filename = customFilename ?: if (isYouTube) "YouTube_Video.mkv" else url.substringAfterLast("/").take(30)
 
@@ -126,6 +103,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             startStandardDownload(url, cookie, filename)
         }
+
+        // Switch to Downloads tab so user sees live progress
+        switchTab(downloadsFragment, isBrowser = false)
     }
 
     private fun startYouTubeDownload(url: String) {
