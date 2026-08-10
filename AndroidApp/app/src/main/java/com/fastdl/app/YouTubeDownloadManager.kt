@@ -44,7 +44,7 @@ class YouTubeDownloadManager(
     suspend fun downloadOptimizedYouTubeVideo(
         url: String,
         outputDir: File,
-        onProgress: ((downloaded: Long, total: Long) -> Unit)? = null
+        onProgress: ((downloaded: Long, total: Long, speed: String) -> Unit)? = null
     ): Pair<File, String> = withContext(Dispatchers.IO) {
 
         val cleanUrl = url.replace("m.youtube.com", "www.youtube.com")
@@ -78,7 +78,7 @@ class YouTubeDownloadManager(
             if (session.returnCode.isValueSuccess) {
                 videoFile.delete()
                 audioFile.delete()
-                onProgress?.invoke(finalOutputFile.length(), finalOutputFile.length())
+                onProgress?.invoke(finalOutputFile.length(), finalOutputFile.length(), "0 KB/s")
                 return@withContext Pair(finalOutputFile, "$safeTitle.mkv")
             } else {
                 throw Exception("FFmpeg Muxing failed: ${session.failStackTrace}")

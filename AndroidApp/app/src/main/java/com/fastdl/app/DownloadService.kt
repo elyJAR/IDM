@@ -46,7 +46,6 @@ class DownloadService : Service() {
         startForeground(1, notification)
 
         if (url != null) {
-            // Save directly into phone's Public Downloads -> FastDL folder
             val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             val outputDir = File(publicDownloads, "FastDL").apply { if (!exists()) mkdirs() }
             
@@ -56,43 +55,43 @@ class DownloadService : Service() {
 
                     if (type == "YOUTUBE") {
                         Log.i("FastDL", "Starting YouTube Download...")
-                        val (finalFile, realTitle) = youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir) { downloaded, total ->
+                        val (finalFile, realTitle) = youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir) { downloaded, total, speed ->
                             val now = System.currentTimeMillis()
                             if (now - lastReportTime > 300 || downloaded == total) {
                                 lastReportTime = now
                                 val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
                                 scope.launch {
-                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status)
+                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
                                 }
                             }
                         }
                         db.downloadDao().updateFilePathByUrl(url, finalFile.absolutePath)
                         db.downloadDao().updateFilenameByUrl(url, realTitle)
-                        db.downloadDao().updateProgressByUrl(url, finalFile.length(), finalFile.length(), "COMPLETED")
+                        db.downloadDao().updateProgressByUrl(url, finalFile.length(), finalFile.length(), "COMPLETED", "0 KB/s")
                         Log.i("FastDL", "YouTube Download Complete: ${finalFile.absolutePath}")
                     } else {
                         Log.i("FastDL", "Starting Standard Download...")
                         val targetFile = File(outputDir, filename)
                         db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
                         
-                        downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total ->
+                        downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total, speed ->
                             val now = System.currentTimeMillis()
                             if (now - lastReportTime > 300 || downloaded == total) {
                                 lastReportTime = now
                                 val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
                                 scope.launch {
-                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status)
+                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
                                 }
                             }
                         }
                         
                         db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
-                        db.downloadDao().updateProgressByUrl(url, targetFile.length(), targetFile.length(), "COMPLETED")
+                        db.downloadDao().updateProgressByUrl(url, targetFile.length(), targetFile.length(), "COMPLETED", "0 KB/s")
                         Log.i("FastDL", "Standard Download Complete: ${targetFile.absolutePath}")
                     }
                 } catch (e: Exception) {
                     Log.e("FastDL", "Download failed: ${e.message}", e)
-                    db.downloadDao().updateProgressByUrl(url, 0L, 0L, "FAILED")
+                    db.downloadDao().updateProgressByUrl(url, 0L, 0L, "FAILED", "0 KB/s")
                 } finally {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()

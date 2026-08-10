@@ -51,7 +51,9 @@ class DownloadAdapter : ListAdapter<DownloadEntity, DownloadAdapter.DownloadView
 
                 val downloadedMB = String.format("%.1f", download.downloadedBytes.toDouble() / (1024 * 1024))
                 val totalMB = String.format("%.1f", download.totalBytes.toDouble() / (1024 * 1024))
-                progressText.text = "${downloadedMB}MB / ${totalMB}MB ($progressPercent%)"
+                
+                val speedDisplay = if (download.status == "DOWNLOADING") " • ${download.speed} [${download.threads} Threads]" else ""
+                progressText.text = "${downloadedMB}MB / ${totalMB}MB ($progressPercent%)$speedDisplay"
             } else {
                 progressBar.isIndeterminate = true
                 progressText.text = "Computing size..."

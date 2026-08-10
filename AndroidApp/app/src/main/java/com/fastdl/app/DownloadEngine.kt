@@ -16,9 +16,8 @@ class DownloadEngine(private val client: OkHttpClient) {
         url: String,
         targetFile: File,
         parts: Int = 8,
-        onProgress: ((downloaded: Long, total: Long) -> Unit)? = null
+        onProgress: ((downloaded: Long, total: Long, speed: String) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
-        // 1. Get File Size (HEAD Request)
         val headRequest = Request.Builder().url(url).head().build()
         val response = client.newCall(headRequest).execute()
         
@@ -26,15 +25,17 @@ class DownloadEngine(private val client: OkHttpClient) {
         val acceptRanges = response.header("Accept-Ranges") == "bytes"
 
         if (contentLength > 0 && acceptRanges) {
-            onProgress?.invoke(0L, contentLength)
+            onProgress?.invoke(0L, contentLength, "0 KB/s")
 
-            // Allocate space for the target file
             val randomAccessFile = RandomAccessFile(targetFile, "rw")
             randomAccessFile.setLength(contentLength)
             randomAccessFile.close()
 
             val downloadedBytes = AtomicLong(0L)
             val chunkSize = contentLength / parts
+
+            var lastCheckTime = System.currentTimeMillis()
+            var lastCheckBytes = 0L
 
             val deferredParts = (0 until parts).map { index ->
                 async {
@@ -43,16 +44,26 @@ class DownloadEngine(private val client: OkHttpClient) {
                     
                     downloadChunk(url, targetFile, startByte, endByte) { bytesRead ->
                         val currentTotal = downloadedBytes.addAndGet(bytesRead.toLong())
-                        onProgress?.invoke(currentTotal, contentLength)
+                        
+                        val now = System.currentTimeMillis()
+                        val timeDiff = now - lastCheckTime
+                        if (timeDiff >= 500) {
+                            val bytesDiff = currentTotal - lastCheckBytes
+                            val speedBps = if (timeDiff > 0) (bytesDiff * 1000) / timeDiff else 0L
+                            val speedFormatted = formatSpeed(speedBps)
+
+                            lastCheckTime = now
+                            lastCheckBytes = currentTotal
+
+                            onProgress?.invoke(currentTotal, contentLength, speedFormatted)
+                        }
                     }
                 }
             }
             
-            // Await all chunks to complete
             deferredParts.awaitAll()
-            onProgress?.invoke(contentLength, contentLength)
+            onProgress?.invoke(contentLength, contentLength, "0 KB/s")
         } else {
-            // Fallback to single thread download if server doesn't support ranges
             downloadSingleThread(url, targetFile, onProgress)
         }
     }
@@ -87,13 +98,16 @@ class DownloadEngine(private val client: OkHttpClient) {
     private fun downloadSingleThread(
         url: String,
         file: File,
-        onProgress: ((downloaded: Long, total: Long) -> Unit)?
+        onProgress: ((downloaded: Long, total: Long, speed: String) -> Unit)?
     ) {
         val request = Request.Builder().url(url).build()
         val response = client.newCall(request).execute()
         val contentLength = response.body?.contentLength() ?: 0L
 
-        onProgress?.invoke(0L, contentLength)
+        onProgress?.invoke(0L, contentLength, "0 KB/s")
+
+        var lastCheckTime = System.currentTimeMillis()
+        var lastCheckBytes = 0L
 
         response.body?.byteStream()?.use { input ->
             file.outputStream().use { output ->
@@ -103,10 +117,30 @@ class DownloadEngine(private val client: OkHttpClient) {
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     output.write(buffer, 0, bytesRead)
                     totalRead += bytesRead
-                    onProgress?.invoke(totalRead, contentLength)
+                    
+                    val now = System.currentTimeMillis()
+                    val timeDiff = now - lastCheckTime
+                    if (timeDiff >= 500) {
+                        val bytesDiff = totalRead - lastCheckBytes
+                        val speedBps = if (timeDiff > 0) (bytesDiff * 1000) / timeDiff else 0L
+                        val speedFormatted = formatSpeed(speedBps)
+
+                        lastCheckTime = now
+                        lastCheckBytes = totalRead
+
+                        onProgress?.invoke(totalRead, contentLength, speedFormatted)
+                    }
                 }
-                onProgress?.invoke(totalRead, if (contentLength > 0) contentLength else totalRead)
+                onProgress?.invoke(totalRead, if (contentLength > 0) contentLength else totalRead, "0 KB/s")
             }
+        }
+    }
+
+    private fun formatSpeed(bytesPerSec: Long): String {
+        return if (bytesPerSec >= 1024 * 1024) {
+            String.format("%.1f MB/s", bytesPerSec.toDouble() / (1024 * 1024))
+        } else {
+            String.format("%d KB/s", bytesPerSec / 1024)
         }
     }
 }

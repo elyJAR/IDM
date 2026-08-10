@@ -12,5 +12,7 @@ data class DownloadEntity(
     val totalBytes: Long = 0L,
     val downloadedBytes: Long = 0L,
     val filePath: String = "",
-    val isYouTube: Boolean = false
+    val isYouTube: Boolean = false,
+    val speed: String = "0 KB/s",
+    val threads: Int = 8
 )
