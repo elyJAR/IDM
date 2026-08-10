@@ -111,15 +111,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/shortcutsLayout" />
 
-    <!-- VidMate-Style Pulsing Video Sniffer FloatingActionButton -->
+    <!-- VidMate-Style ALWAYS-VISIBLE Red Download Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/videoSnifferFab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="24dp"
-        android:contentDescription="Download Detected Video"
+        android:contentDescription="Download Video / Media"
         android:src="@android:drawable/stat_sys_download"
-        android:visibility="gone"
+        android:visibility="visible"
         app:backgroundTint="#ef4444"
         app:tint="#ffffff"
         app:layout_constraintBottom_toBottomOf="parent"

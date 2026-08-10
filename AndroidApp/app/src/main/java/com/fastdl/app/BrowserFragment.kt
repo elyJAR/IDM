@@ -11,6 +11,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 
@@ -19,7 +20,6 @@ class BrowserFragment : Fragment() {
     private lateinit var webView: WebView
     private lateinit var urlEditText: EditText
     private lateinit var videoSnifferFab: FloatingActionButton
-    private var detectedMediaUrl: String? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -49,9 +49,13 @@ class BrowserFragment : Fragment() {
         btnFacebook.setOnClickListener { loadUserUrl("https://m.facebook.com") }
         btnTikTok.setOnClickListener { loadUserUrl("https://www.tiktok.com") }
 
+        // VidMate Style: Tap floating red button at any time to download active video/page
         videoSnifferFab.setOnClickListener {
-            detectedMediaUrl?.let { url ->
-                showQualityDialog(url)
+            val currentUrl = webView.url
+            if (!currentUrl.isNullOrEmpty()) {
+                showQualityDialog(currentUrl)
+            } else {
+                Toast.makeText(requireContext(), "No active video found on page", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -73,16 +77,18 @@ class BrowserFragment : Fragment() {
                 super.onPageStarted(view, url, favicon)
                 url?.let {
                     urlEditText.setText(it)
-                    checkUrlForMedia(it)
+                }
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                url?.let {
+                    urlEditText.setText(it)
                 }
             }
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                val url = request?.url?.toString()
-                if (url != null) {
-                    checkUrlForMedia(url)
-                }
-                return false
+                return false // Load inside WebView
             }
         }
     }
@@ -94,20 +100,6 @@ class BrowserFragment : Fragment() {
         }
         urlEditText.setText(finalUrl)
         webView.loadUrl(finalUrl)
-    }
-
-    private fun checkUrlForMedia(url: String) {
-        val isMedia = url.contains("youtube.com/watch") ||
-                url.contains("youtu.be") ||
-                url.endsWith(".mp4") ||
-                url.endsWith(".m3u8") ||
-                url.endsWith(".webm") ||
-                url.endsWith(".mp3")
-
-        if (isMedia) {
-            detectedMediaUrl = url
-            videoSnifferFab.visibility = View.VISIBLE
-        }
     }
 
     private fun showQualityDialog(url: String) {
