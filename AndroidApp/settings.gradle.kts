@@ -10,7 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven(url = "https://jitpack.io") // Required for NewPipeExtractor
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
