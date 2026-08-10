@@ -37,7 +37,7 @@ class DownloadService : Service() {
         val notification = NotificationCompat.Builder(this, "FASTDL_CHANNEL")
             .setContentTitle("FastDL is active")
             .setContentText("Downloading: $filename")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_launcher)
             .build()
 
         // Start Foreground to prevent OS from killing the download process
