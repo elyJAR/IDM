@@ -34,6 +34,12 @@ android {
     }
 }
 
+repositories {
+    google()
+    mavenCentral()
+    maven { url = uri("https://jitpack.io") }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
@@ -53,8 +59,8 @@ dependencies {
     kapt("androidx.room:room-compiler:$room_version")
 
     // FFmpegKit for Video/Audio Muxing (YouTube downloads)
-    implementation("com.arthenica:ffmpeg-kit-full:6.0-2")
+    implementation("com.arthenica:ffmpeg-kit-full:5.1")
 
     // NewPipeExtractor for YouTube link parsing (Requires JitPack in settings.gradle)
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.22.8")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.4")
 }
