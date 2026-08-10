@@ -53,7 +53,7 @@ dependencies {
     kapt("androidx.room:room-compiler:$room_version")
 
     // FFmpegKit for Video/Audio Muxing (YouTube downloads)
-    implementation("com.arthenica:ffmpeg-kit-full:6.0.LTS")
+    implementation("com.arthenica:ffmpeg-kit-full:6.0-2")
 
     // NewPipeExtractor for YouTube link parsing (Requires JitPack in settings.gradle)
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.4")
