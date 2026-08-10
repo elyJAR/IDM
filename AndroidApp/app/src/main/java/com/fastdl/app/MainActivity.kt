@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.TextView
 import android.widget.Toast
+import android.view.Menu
+import android.view.MenuItem
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +45,46 @@ class MainActivity : AppCompatActivity() {
         switchTab(browserFragment, isBrowser = true)
 
         handleIntent(intent)
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_clear_completed -> {
+                CoroutineScope(Dispatchers.IO).launch {
+                    db.downloadDao().deleteCompletedDownloads()
+                }
+                Toast.makeText(this, "Cleared completed downloads", Toast.LENGTH_SHORT).show()
+                true
+            }
+            R.id.action_clear_cache -> {
+                android.webkit.WebStorage.getInstance().deleteAllData()
+                android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                Toast.makeText(this, "Cleared browser cache & cookies", Toast.LENGTH_SHORT).show()
+                true
+            }
+            R.id.action_settings -> {
+                AlertDialog.Builder(this)
+                    .setTitle("Download Settings")
+                    .setMessage("• Threads per download: 8 (Multi-part Enabled)\n• WiFi Only: Disabled\n• Auto-Sniffer: Enabled")
+                    .setPositiveButton("OK", null)
+                    .show()
+                true
+            }
+            R.id.action_about -> {
+                AlertDialog.Builder(this)
+                    .setTitle("About FastDL Engine")
+                    .setMessage("FastDL v1.0.0-beta\nHigh-Performance Multi-threaded Downloader & In-App VidMate Browser Engine.")
+                    .setPositiveButton("OK", null)
+                    .show()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     private var currentTabIsBrowser = true
