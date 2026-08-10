@@ -22,7 +22,7 @@ class DownloadService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + job)
     private val client = OkHttpClient()
     private val downloadEngine = DownloadEngine(client)
-    private val youtubeManager = YouTubeDownloadManager(downloadEngine)
+    private val youtubeManager = YouTubeDownloadManager(downloadEngine, client)
     private lateinit var db: AppDatabase
 
     override fun onCreate() {
@@ -49,19 +49,28 @@ class DownloadService : Service() {
             
             scope.launch {
                 try {
+                    var lastReportTime = 0L
+
                     if (type == "YOUTUBE") {
                         Log.i("FastDL", "Starting YouTube Download...")
-                        youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir)
+                        youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir) { downloaded, total ->
+                            val now = System.currentTimeMillis()
+                            if (now - lastReportTime > 300 || downloaded == total) {
+                                lastReportTime = now
+                                val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
+                                scope.launch {
+                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status)
+                                }
+                            }
+                        }
                         db.downloadDao().updateProgressByUrl(url, 100L, 100L, "COMPLETED")
                         Log.i("FastDL", "YouTube Download Complete!")
                     } else {
                         Log.i("FastDL", "Starting Standard Download...")
                         val targetFile = File(outputDir, filename)
                         
-                        var lastReportTime = 0L
                         downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total ->
                             val now = System.currentTimeMillis()
-                            // Throttle database updates to max once every 300ms for high performance
                             if (now - lastReportTime > 300 || downloaded == total) {
                                 lastReportTime = now
                                 val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
