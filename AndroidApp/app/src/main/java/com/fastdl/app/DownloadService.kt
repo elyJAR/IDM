@@ -23,9 +23,11 @@ class DownloadService : Service() {
     private val client = OkHttpClient()
     private val downloadEngine = DownloadEngine(client)
     private val youtubeManager = YouTubeDownloadManager(downloadEngine)
+    private lateinit var db: AppDatabase
 
     override fun onCreate() {
         super.onCreate()
+        db = AppDatabase.getDatabase(this)
         createNotificationChannel()
     }
 
@@ -40,7 +42,6 @@ class DownloadService : Service() {
             .setSmallIcon(R.drawable.ic_launcher)
             .build()
 
-        // Start Foreground to prevent OS from killing the download process
         startForeground(1, notification)
 
         if (url != null) {
@@ -51,15 +52,31 @@ class DownloadService : Service() {
                     if (type == "YOUTUBE") {
                         Log.i("FastDL", "Starting YouTube Download...")
                         youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir)
+                        db.downloadDao().updateProgressByUrl(url, 100L, 100L, "COMPLETED")
                         Log.i("FastDL", "YouTube Download Complete!")
                     } else {
                         Log.i("FastDL", "Starting Standard Download...")
                         val targetFile = File(outputDir, filename)
-                        downloadEngine.downloadFileMultiPart(url, targetFile)
+                        
+                        var lastReportTime = 0L
+                        downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total ->
+                            val now = System.currentTimeMillis()
+                            // Throttle database updates to max once every 300ms for high performance
+                            if (now - lastReportTime > 300 || downloaded == total) {
+                                lastReportTime = now
+                                val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
+                                scope.launch {
+                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status)
+                                }
+                            }
+                        }
+                        
+                        db.downloadDao().updateProgressByUrl(url, targetFile.length(), targetFile.length(), "COMPLETED")
                         Log.i("FastDL", "Standard Download Complete!")
                     }
                 } catch (e: Exception) {
                     Log.e("FastDL", "Download failed: ${e.message}", e)
+                    db.downloadDao().updateProgressByUrl(url, 0L, 0L, "FAILED")
                 } finally {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
