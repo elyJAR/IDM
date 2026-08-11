@@ -49,15 +49,10 @@ class DownloadService : Service() {
         startForeground(1, notification)
 
         if (url != null) {
-            val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            var outputDir = File(publicDownloads, "FastDL")
-            
+            // Save directly into the main public Downloads folder (/sdcard/Download/)
+            val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             if (!outputDir.exists()) {
-                val created = outputDir.mkdirs()
-                if (!created) {
-                    // Fallback to app's external files directory if public directory cannot be created
-                    outputDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
-                }
+                outputDir.mkdirs()
             }
             
             scope.launch {
