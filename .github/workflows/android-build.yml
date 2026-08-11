@@ -45,5 +45,7 @@ jobs:
         tag_name: "v1.0.0-beta"
         name: "FastDL Pre-release"
         prerelease: true
+        overwrite: true
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
