@@ -37,6 +37,7 @@ class DownloadService : Service() {
         val downloadId = intent?.getIntExtra("DOWNLOAD_ID", -1) ?: -1
         val type = intent?.getStringExtra("TYPE")
         val url = intent?.getStringExtra("URL")
+        val cookie = intent?.getStringExtra("COOKIE")
         val filename = intent?.getStringExtra("FILENAME") ?: "download_file"
 
         val notification = NotificationCompat.Builder(this, "FASTDL_CHANNEL")
@@ -48,9 +49,16 @@ class DownloadService : Service() {
         startForeground(1, notification)
 
         if (url != null) {
-            // Primary location: Public Downloads / FastDL
             val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val outputDir = File(publicDownloads, "FastDL").apply { if (!exists()) mkdirs() }
+            var outputDir = File(publicDownloads, "FastDL")
+            
+            if (!outputDir.exists()) {
+                val created = outputDir.mkdirs()
+                if (!created) {
+                    // Fallback to app's external files directory if public directory cannot be created
+                    outputDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+                }
+            }
             
             scope.launch {
                 try {
@@ -80,12 +88,10 @@ class DownloadService : Service() {
                             }
                         )
 
-                        // Save exact path to DB
                         if (downloadId != -1) db.downloadDao().updateFilePathById(downloadId, finalFile.absolutePath)
                         db.downloadDao().updateFilePathByUrl(url, finalFile.absolutePath)
                         db.downloadDao().updateProgressByUrl(url, finalFile.length(), finalFile.length(), "COMPLETED", "0 KB/s")
 
-                        // CRITICAL: Scan file into Android MediaStore so it appears in My Files / Downloads app
                         scanFileToMediaStore(finalFile.absolutePath)
                         Log.i("FastDL", "YouTube Download Complete: ${finalFile.absolutePath}")
                     } else {
@@ -95,17 +101,22 @@ class DownloadService : Service() {
                         if (downloadId != -1) db.downloadDao().updateFilePathById(downloadId, targetFile.absolutePath)
                         db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
 
-                        downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total, speed ->
-                            val now = System.currentTimeMillis()
-                            if (now - lastReportTime > 300 || downloaded == total) {
-                                lastReportTime = now
-                                val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
-                                scope.launch {
-                                    if (downloadId != -1) db.downloadDao().updateProgressById(downloadId, downloaded, total, status, speed)
-                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
+                        downloadEngine.downloadFileMultiPart(
+                            url = url,
+                            targetFile = targetFile,
+                            cookie = cookie,
+                            onProgress = { downloaded, total, speed ->
+                                val now = System.currentTimeMillis()
+                                if (now - lastReportTime > 300 || downloaded == total) {
+                                    lastReportTime = now
+                                    val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
+                                    scope.launch {
+                                        if (downloadId != -1) db.downloadDao().updateProgressById(downloadId, downloaded, total, status, speed)
+                                        db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
+                                    }
                                 }
                             }
-                        }
+                        )
 
                         scanFileToMediaStore(targetFile.absolutePath)
                         Log.i("FastDL", "Standard Download Complete: ${targetFile.absolutePath}")

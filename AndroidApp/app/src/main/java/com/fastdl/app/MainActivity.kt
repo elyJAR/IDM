@@ -1,19 +1,25 @@
 package com.fastdl.app
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.widget.TextView
-import android.widget.Toast
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,7 +50,25 @@ class MainActivity : AppCompatActivity() {
         // Set default fragment to Browser (VidMate Style)
         switchTab(browserFragment, isBrowser = true)
 
+        requestStoragePermissions()
         handleIntent(intent)
+    }
+
+    private fun requestStoragePermissions() {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (permissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 100)
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -70,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_settings -> {
                 AlertDialog.Builder(this)
                     .setTitle("Download Settings")
-                    .setMessage("• Threads per download: 8 (Multi-part Enabled)\n• WiFi Only: Disabled\n• Auto-Sniffer: Enabled")
+                    .setMessage("• Threads per download: 8 (Multi-part Enabled)\n• Storage: Public Downloads/FastDL\n• Extension Handoff: Active")
                     .setPositiveButton("OK", null)
                     .show()
                 true
@@ -78,7 +102,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_about -> {
                 AlertDialog.Builder(this)
                     .setTitle("About FastDL Engine")
-                    .setMessage("FastDL v1.0.0-beta\nHigh-Performance Multi-threaded Downloader & In-App VidMate Browser Engine.")
+                    .setMessage("FastDL v1.0.0-beta\nHigh-Performance Multi-threaded Downloader & Extension Bridge Engine.")
                     .setPositiveButton("OK", null)
                     .show()
                 true
@@ -115,27 +139,37 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIntent(intent)
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_VIEW) {
-            val data: Uri? = intent.data
-            if (data?.scheme == "fastdl" && data.host == "download") {
-                val downloadUrl = data.getQueryParameter("url")
-                val cookie = data.getQueryParameter("cookie")
-                val filename = data.getQueryParameter("filename")
+        val data: Uri? = intent?.data
+        if (data != null && data.scheme == "fastdl" && data.host == "download") {
+            try {
+                val rawUrl = data.getQueryParameter("url")
+                val rawCookie = data.getQueryParameter("cookie")
+                val rawFilename = data.getQueryParameter("filename")
 
-                if (downloadUrl != null) {
+                val downloadUrl = if (!rawUrl.isNullOrEmpty()) URLDecoder.decode(rawUrl, "UTF-8") else null
+                val cookie = if (!rawCookie.isNullOrEmpty()) URLDecoder.decode(rawCookie, "UTF-8") else null
+                val filename = if (!rawFilename.isNullOrEmpty()) URLDecoder.decode(rawFilename, "UTF-8") else null
+
+                if (!downloadUrl.isNullOrEmpty()) {
+                    Log.i("FastDL", "Received Extension Intent -> URL: $downloadUrl")
                     processDownloadUrl(downloadUrl, cookie, filename)
                 }
+            } catch (e: Exception) {
+                Log.e("FastDL", "Error parsing extension intent: ${e.message}", e)
+            } finally {
+                intent.data = null // Clear data so it's not processed twice
             }
         }
     }
 
     fun processDownloadUrl(url: String, cookie: String?, customFilename: String?) {
         val isYouTube = url.contains("youtube.com") || url.contains("youtu.be")
-        val filename = customFilename ?: if (isYouTube) "Fetching Title..." else url.substringAfterLast("/").take(30)
+        val filename = customFilename?.ifEmpty { null } ?: if (isYouTube) "Fetching Title..." else url.substringAfterLast("/").take(30).ifEmpty { "download_file" }
 
         CoroutineScope(Dispatchers.IO).launch {
             val downloadEntity = DownloadEntity(
@@ -153,10 +187,11 @@ class MainActivity : AppCompatActivity() {
                 putExtra("DOWNLOAD_ID", insertedId)
                 putExtra("TYPE", if (isYouTube) "YOUTUBE" else "STANDARD")
                 putExtra("URL", url)
+                putExtra("COOKIE", cookie)
                 putExtra("FILENAME", filename)
             }
 
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
             } else {
                 startService(serviceIntent)

@@ -12,14 +12,25 @@ import java.util.concurrent.atomic.AtomicLong
 
 class DownloadEngine(private val client: OkHttpClient) {
 
+    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
     suspend fun downloadFileMultiPart(
         url: String,
         targetFile: File,
         parts: Int = 8,
+        cookie: String? = null,
         onProgress: ((downloaded: Long, total: Long, speed: String) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
-        val headRequest = Request.Builder().url(url).head().build()
-        val response = client.newCall(headRequest).execute()
+        val headRequestBuilder = Request.Builder()
+            .url(url)
+            .head()
+            .header("User-Agent", userAgent)
+
+        if (!cookie.isNullOrEmpty()) {
+            headRequestBuilder.header("Cookie", cookie)
+        }
+
+        val response = client.newCall(headRequestBuilder.build()).execute()
         
         val contentLength = response.header("Content-Length")?.toLongOrNull() ?: 0L
         val acceptRanges = response.header("Accept-Ranges") == "bytes"
@@ -42,7 +53,7 @@ class DownloadEngine(private val client: OkHttpClient) {
                     val startByte = index * chunkSize
                     val endByte = if (index == parts - 1) contentLength - 1 else (startByte + chunkSize - 1)
                     
-                    downloadChunk(url, targetFile, startByte, endByte) { bytesRead ->
+                    downloadChunk(url, targetFile, startByte, endByte, cookie) { bytesRead ->
                         val currentTotal = downloadedBytes.addAndGet(bytesRead.toLong())
                         
                         val now = System.currentTimeMillis()
@@ -64,7 +75,7 @@ class DownloadEngine(private val client: OkHttpClient) {
             deferredParts.awaitAll()
             onProgress?.invoke(contentLength, contentLength, "0 KB/s")
         } else {
-            downloadSingleThread(url, targetFile, onProgress)
+            downloadSingleThread(url, targetFile, cookie, onProgress)
         }
     }
 
@@ -73,14 +84,19 @@ class DownloadEngine(private val client: OkHttpClient) {
         file: File,
         start: Long,
         end: Long,
+        cookie: String?,
         onBytesRead: (Int) -> Unit
     ) {
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(url)
             .addHeader("Range", "bytes=$start-$end")
-            .build()
+            .header("User-Agent", userAgent)
 
-        val response = client.newCall(request).execute()
+        if (!cookie.isNullOrEmpty()) {
+            requestBuilder.header("Cookie", cookie)
+        }
+
+        val response = client.newCall(requestBuilder.build()).execute()
         
         response.body?.byteStream()?.use { input ->
             RandomAccessFile(file, "rw").use { output ->
@@ -98,10 +114,18 @@ class DownloadEngine(private val client: OkHttpClient) {
     private fun downloadSingleThread(
         url: String,
         file: File,
+        cookie: String?,
         onProgress: ((downloaded: Long, total: Long, speed: String) -> Unit)?
     ) {
-        val request = Request.Builder().url(url).build()
-        val response = client.newCall(request).execute()
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .header("User-Agent", userAgent)
+
+        if (!cookie.isNullOrEmpty()) {
+            requestBuilder.header("Cookie", cookie)
+        }
+
+        val response = client.newCall(requestBuilder.build()).execute()
         val contentLength = response.body?.contentLength() ?: 0L
 
         onProgress?.invoke(0L, contentLength, "0 KB/s")
