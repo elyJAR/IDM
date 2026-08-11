@@ -135,9 +135,8 @@ class MainActivity : AppCompatActivity() {
 
     fun processDownloadUrl(url: String, cookie: String?, customFilename: String?) {
         val isYouTube = url.contains("youtube.com") || url.contains("youtu.be")
-        val filename = customFilename ?: if (isYouTube) "YouTube_Video.mkv" else url.substringAfterLast("/").take(30)
+        val filename = customFilename ?: if (isYouTube) "Fetching Title..." else url.substringAfterLast("/").take(30)
 
-        // Insert into database to show up instantly in RecyclerView
         CoroutineScope(Dispatchers.IO).launch {
             val downloadEntity = DownloadEntity(
                 url = url,
@@ -148,43 +147,25 @@ class MainActivity : AppCompatActivity() {
                 filePath = "",
                 isYouTube = isYouTube
             )
-            db.downloadDao().insertDownload(downloadEntity)
+            val insertedId = db.downloadDao().insertDownload(downloadEntity).toInt()
+
+            val serviceIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
+                putExtra("DOWNLOAD_ID", insertedId)
+                putExtra("TYPE", if (isYouTube) "YOUTUBE" else "STANDARD")
+                putExtra("URL", url)
+                putExtra("FILENAME", filename)
+            }
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
         }
 
-        Toast.makeText(this, "Starting download: $filename", Toast.LENGTH_SHORT).show()
-
-        if (isYouTube) {
-            startYouTubeDownload(url)
-        } else {
-            startStandardDownload(url, cookie, filename)
-        }
+        Toast.makeText(this, "Starting download...", Toast.LENGTH_SHORT).show()
 
         // Switch to Downloads tab so user sees live progress
         switchTab(downloadsFragment, isBrowser = false)
-    }
-
-    private fun startYouTubeDownload(url: String) {
-        val serviceIntent = Intent(this, DownloadService::class.java).apply {
-            putExtra("TYPE", "YOUTUBE")
-            putExtra("URL", url)
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
-    }
-
-    private fun startStandardDownload(url: String, cookie: String?, filename: String) {
-        val serviceIntent = Intent(this, DownloadService::class.java).apply {
-            putExtra("TYPE", "STANDARD")
-            putExtra("URL", url)
-            putExtra("FILENAME", filename)
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
     }
 }

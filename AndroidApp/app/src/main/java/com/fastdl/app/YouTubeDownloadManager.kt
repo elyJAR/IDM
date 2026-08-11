@@ -45,6 +45,7 @@ class YouTubeDownloadManager(
     suspend fun downloadOptimizedYouTubeVideo(
         url: String,
         outputDir: File,
+        onTitleExtracted: ((String) -> Unit)? = null,
         onProgress: ((downloaded: Long, total: Long, speed: String) -> Unit)? = null
     ): Pair<File, String> = withContext(Dispatchers.IO) {
 
@@ -53,7 +54,11 @@ class YouTubeDownloadManager(
         extractor.fetchPage()
 
         val rawTitle = extractor.name ?: "YouTube_Video"
-        val safeTitle = rawTitle.replace(Regex("[^a-zA-Z0-9._ -]"), "_").take(50)
+        val safeTitle = rawTitle.replace(Regex("[^a-zA-Z0-9._ -]"), "_").trim().take(50)
+        val realFilename = "$safeTitle.mp4"
+
+        // Report real video title back immediately so DB and UI update right away
+        onTitleExtracted?.invoke(realFilename)
 
         // 1. Select Optimal Compact Video Stream (AV1/VP9 for minimal file size)
         val videoOnlyStreams = extractor.videoOnlyStreams
@@ -73,7 +78,7 @@ class YouTubeDownloadManager(
         if (optimalVideo != null && primaryAudio != null) {
             val videoFile = File(outputDir, "temp_video_${System.currentTimeMillis()}.webm")
             val audioFile = File(outputDir, "temp_audio_${System.currentTimeMillis()}.webm")
-            val finalOutputFile = File(outputDir, "$safeTitle.mp4")
+            val finalOutputFile = File(outputDir, realFilename)
 
             try {
                 // Download video and single primary audio stream
@@ -86,19 +91,19 @@ class YouTubeDownloadManager(
 
                 if (session.returnCode.isValueSuccess) {
                     onProgress?.invoke(finalOutputFile.length(), finalOutputFile.length(), "0 KB/s")
-                    return@withContext Pair(finalOutputFile, "$safeTitle.mp4")
+                    return@withContext Pair(finalOutputFile, realFilename)
                 } else {
                     throw Exception("FFmpeg Muxing failed: ${session.failStackTrace}")
                 }
             } finally {
-                // Clean up temp files immediately to free up phone storage!
+                // Clean up temp files immediately to free up phone storage
                 if (videoFile.exists()) videoFile.delete()
                 if (audioFile.exists()) audioFile.delete()
             }
         } else if (optimalVideo != null) {
-            val finalOutputFile = File(outputDir, "$safeTitle.mp4")
+            val finalOutputFile = File(outputDir, realFilename)
             downloadEngine.downloadFileMultiPart(optimalVideo.content, finalOutputFile, onProgress = onProgress)
-            return@withContext Pair(finalOutputFile, "$safeTitle.mp4")
+            return@withContext Pair(finalOutputFile, realFilename)
         } else {
             throw Exception("Could not extract video streams from YouTube URL")
         }

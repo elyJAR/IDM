@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
 import android.os.IBinder
@@ -33,6 +34,7 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val downloadId = intent?.getIntExtra("DOWNLOAD_ID", -1) ?: -1
         val type = intent?.getStringExtra("TYPE")
         val url = intent?.getStringExtra("URL")
         val filename = intent?.getStringExtra("FILENAME") ?: "download_file"
@@ -46,6 +48,7 @@ class DownloadService : Service() {
         startForeground(1, notification)
 
         if (url != null) {
+            // Primary location: Public Downloads / FastDL
             val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             val outputDir = File(publicDownloads, "FastDL").apply { if (!exists()) mkdirs() }
             
@@ -55,42 +58,61 @@ class DownloadService : Service() {
 
                     if (type == "YOUTUBE") {
                         Log.i("FastDL", "Starting YouTube Download...")
-                        val (finalFile, realTitle) = youtubeManager.downloadOptimizedYouTubeVideo(url, outputDir) { downloaded, total, speed ->
-                            val now = System.currentTimeMillis()
-                            if (now - lastReportTime > 300 || downloaded == total) {
-                                lastReportTime = now
-                                val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
+                        val (finalFile, realTitle) = youtubeManager.downloadOptimizedYouTubeVideo(
+                            url = url,
+                            outputDir = outputDir,
+                            onTitleExtracted = { title ->
                                 scope.launch {
-                                    db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
+                                    if (downloadId != -1) db.downloadDao().updateFilenameById(downloadId, title)
+                                    db.downloadDao().updateFilenameByUrl(url, title)
+                                }
+                            },
+                            onProgress = { downloaded, total, speed ->
+                                val now = System.currentTimeMillis()
+                                if (now - lastReportTime > 300 || downloaded == total) {
+                                    lastReportTime = now
+                                    val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
+                                    scope.launch {
+                                        if (downloadId != -1) db.downloadDao().updateProgressById(downloadId, downloaded, total, status, speed)
+                                        db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
+                                    }
                                 }
                             }
-                        }
+                        )
+
+                        // Save exact path to DB
+                        if (downloadId != -1) db.downloadDao().updateFilePathById(downloadId, finalFile.absolutePath)
                         db.downloadDao().updateFilePathByUrl(url, finalFile.absolutePath)
-                        db.downloadDao().updateFilenameByUrl(url, realTitle)
                         db.downloadDao().updateProgressByUrl(url, finalFile.length(), finalFile.length(), "COMPLETED", "0 KB/s")
+
+                        // CRITICAL: Scan file into Android MediaStore so it appears in My Files / Downloads app
+                        scanFileToMediaStore(finalFile.absolutePath)
                         Log.i("FastDL", "YouTube Download Complete: ${finalFile.absolutePath}")
                     } else {
                         Log.i("FastDL", "Starting Standard Download...")
                         val targetFile = File(outputDir, filename)
-                        db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
                         
+                        if (downloadId != -1) db.downloadDao().updateFilePathById(downloadId, targetFile.absolutePath)
+                        db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
+
                         downloadEngine.downloadFileMultiPart(url, targetFile) { downloaded, total, speed ->
                             val now = System.currentTimeMillis()
                             if (now - lastReportTime > 300 || downloaded == total) {
                                 lastReportTime = now
                                 val status = if (total > 0 && downloaded >= total) "COMPLETED" else "DOWNLOADING"
                                 scope.launch {
+                                    if (downloadId != -1) db.downloadDao().updateProgressById(downloadId, downloaded, total, status, speed)
                                     db.downloadDao().updateProgressByUrl(url, downloaded, total, status, speed)
                                 }
                             }
                         }
-                        
-                        db.downloadDao().updateFilePathByUrl(url, targetFile.absolutePath)
-                        db.downloadDao().updateProgressByUrl(url, targetFile.length(), targetFile.length(), "COMPLETED", "0 KB/s")
+
+                        scanFileToMediaStore(targetFile.absolutePath)
                         Log.i("FastDL", "Standard Download Complete: ${targetFile.absolutePath}")
                     }
                 } catch (e: Exception) {
                     Log.e("FastDL", "Download failed: ${e.message}", e)
+                    if (downloadId != -1) db.downloadDao().updateProgressById(downloadId, 0L, 0L, "FAILED", "0 KB/s")
                     db.downloadDao().updateProgressByUrl(url, 0L, 0L, "FAILED", "0 KB/s")
                 } finally {
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -102,6 +124,20 @@ class DownloadService : Service() {
         }
 
         return START_NOT_STICKY
+    }
+
+    private fun scanFileToMediaStore(path: String) {
+        try {
+            MediaScannerConnection.scanFile(
+                applicationContext,
+                arrayOf(path),
+                null
+            ) { scannedPath, uri ->
+                Log.i("FastDL", "Scanned $scannedPath to MediaStore -> $uri")
+            }
+        } catch (e: Exception) {
+            Log.e("FastDL", "MediaScanner failed: ${e.message}")
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
