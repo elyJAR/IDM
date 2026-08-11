@@ -58,8 +58,7 @@ class QualitySelectionBottomSheet : BottomSheetDialogFragment() {
                 val info = manager.fetchVideoInfo(url)
 
                 withContext(Dispatchers.Main) {
-                    val audioBadge = if (info.audioTracksCount > 1) " 🌐 (${info.audioTracksCount} Audio Tracks)" else ""
-                    titleText.text = "${info.title}$audioBadge"
+                    titleText.text = info.title
                     radio1080.text = "1080p Full HD (AV1/VP9) ~ ${info.size1080p}"
                     radio720.text = "720p HD (Compact Size) ~ ${info.size720p}"
                     radio480.text = "480p SD (Data Saver) ~ ${info.size480p}"
